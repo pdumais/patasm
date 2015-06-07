@@ -15,9 +15,9 @@ It is possible to use the assembler, disassembler and emulator at the command-li
 using node.js.
 
 Example:
-Assembling a binary: ./as.js test.asm
-Disassembling a binary: ./deasm.js rom.bin
-Running a binary: ./vm.js rom.bin
+* Assembling a binary: ./as.js test.asm
+* Disassembling a binary: ./deasm.js rom.bin
+* Running a binary: ./vm.js rom.bin
 
 You can assemble a binary in the web UI and use it from the command-line and vice-versa
 
