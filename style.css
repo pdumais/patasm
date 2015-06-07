@@ -1,0 +1,161 @@
+BODY
+{
+background-color:#8FC8FF;
+}
+
+.sourcecode
+{
+width:100%;
+height:300px;
+border: 1px solid black;
+overflow:auto;
+background-color:#B9DBFD;
+}
+
+.disassembly
+{
+border: 1px solid black;
+width:100%;
+height:300px;
+overflow:auto;
+background-color:#B9DBFD;
+}
+
+.disassembly pre
+{
+margin-top:0px;
+margin-bottom:0px;
+padding-top:0px;
+padding-bottom:0px;
+width:100%;
+}
+
+.header
+{
+width:900px;
+margin:auto;
+padding:5px;
+}
+
+.codediv
+{
+background-color:#4AA2F6;
+border-radius:5px;
+border: 1px solid black;
+padding:5px;
+width:900px;
+margin:auto;
+}
+
+.codewindow
+{
+width:375px;
+float:left;
+margin-right:10px;
+}
+
+.output
+{
+width:500px;
+height:50px;
+border: 1px solid black;
+border-radius:5px;
+overflow:auto;
+background-color:#B9DBFD;
+margin-top:10px;
+padding:5px;
+}
+
+.system
+{
+background-color:#4AA2F6;
+width:900px;
+border-radius:5px;
+padding:5px;
+margin-top:10px;
+border:1px solid black;
+margin-left:auto;
+margin-right:auto;
+}
+
+.registers
+{
+background-color:#B9DBFD;
+border-collapse:collapse;
+border:1px solid black;
+margin-bottom:5px;
+}
+
+.registers td, .registers th
+{
+width:10px;
+border:1px solid black;
+padding:3px;
+}
+
+.screen canvas
+{
+border:1px solid black;
+margin-left:20px;
+}
+
+.memory
+{
+width:790px;
+margin-bottom:5px;
+border:0px;
+border-collapse:collapse;
+}
+
+.memory td
+{
+padding:0px;
+}
+
+.memory div
+{
+height:260px;
+background-color:#B9DBFD;
+border:1px solid black;
+overflow:auto;
+}
+
+.memory input
+{
+width:100%;
+border: 0px;
+border-top:1px solid black;
+border-left:1px solid black;
+border-right:1px solid black;
+background-color:#FFFFFF;
+}
+
+.memory pre
+{
+margin-top:0px;
+margin-bottom:0px;
+padding-top:0px;
+padding-bottom:0px;
+width:100%;
+}
+
+.textconsole
+{
+border:1px solid black;
+border-collapse: collapse;
+font-family:"Lucida Console";
+font-size:10px;
+width:483px;
+height:275px;
+background-color:black;
+color:white;
+table-layout:fixed;
+}
+
+.textconsole td
+{
+padding:0px;
+margin:0px;
+height:11px;
+}
+

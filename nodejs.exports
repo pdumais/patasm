@@ -1,0 +1,6 @@
+module.exports = {
+    Assembler:Assembler,
+    InstructionSet:InstructionSet,
+    Disassembler:Disassembler,
+    SoC:SoC
+};

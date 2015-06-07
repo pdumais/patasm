@@ -1,0 +1,105 @@
+=================== Fill screen red ===============================
+    mov r14,0x8000
+    mov r0,0xF2000000   ; video control registers
+    mov r2,0
+    st8 r0,r2           ; set 1 to in ctrl reg will switch to text mode
+    mov r3,0xF0000000 ; base addresse for vga buffer
+    mov r1,0
+    mov r5,0xFF0000FF ; red with alpha to 100%
+    mov r2,64000      ; 320*200 pixels
+l:  st32 r3,r5
+    add r3,4
+    sub r2,1
+    cmp r2,0
+    jmp.nz l
+    break
+
+=================== Call a function ===============================
+    mov   r14,0x8000
+    push  0x12345678
+    push  0xAAAAAAAA
+    call  func
+    pop   r0
+    pop   r0
+    break
+func: mov r0,r14
+    add  r0,4
+    ld32 r10,r0
+    add  r0,4
+    ld32 r11,r0
+    ret
+
+=================== Exception handler for Divide by zero ===============================
+    mov r14,0x8000
+    mov r1,3
+    reg r1,exhandler
+    div r1,0
+    nop
+    break
+exhandler: pop r13
+    add r13,8       ; pop the return address and add 8
+    push r13        ; so we will return to the following instruction
+    eret            ; effectively ignoring the faulty instruction
+
+
+=================== Read data ===============================
+    mov r14,0x8000
+    ld32 r0,d
+    mov  r1,d
+    add  r1,4
+    ld32 r1,r1
+    break
+d:  $WORD32 0xDEADBEEF
+    $WORD32 0x0DEFACED
+
+
+=================== switch video mode to text ===============================
+    mov r14,0x8000
+    mov r0,0xF2000000   ; video control registers
+    mov r1,0xF1000000
+    mov r2,1            
+    st8 r0,r2           ; set 1 to in ctrl reg will switch to text mode
+    mov r3,2000
+
+    mov r2,0x0
+l:  st8 r1,r2
+    add r1,1
+    add r2,1
+    sub r3,1
+    cmp r3,0
+    break.z
+    jmp l
+
+=================== keyboard IRQ handler and write to screen  ===============================
+    mov   r14,0x8000    ; stack
+    movsi r14,0x9000    ; stack for int handlers
+    movsi r10,0xF1000000
+    movsi r1,0xF3000001
+    mov   r10,0xF2000000
+    mov   r1,1
+    st8   r10,r1         ; switch to text mode
+    mov   r1,1
+    ireg  r1,handler     ; register irq1 handler
+    mov   r5,242
+    sti
+q:  cmp   r5,242
+    jmp.z q
+    ud
+handler:add   r5,1
+    ld8   r2,r1           ; get key from buffer
+    cmp   r2,32
+    st8.ae  r10,r2      ; only print chars higher than 32
+    add.ae  r10,1
+    iret.ae
+    cmp    r2,8
+    sub.z  r10,1         ; backspace, return 2 before
+    mov.z  r2,32
+    st8.z  r10,r2
+    iret.z
+    mov    r11,r10
+    sub    r11,0xF1000000
+    mod    r11,80
+    add    r10,80
+    sub    r10,r11
+    iret
+

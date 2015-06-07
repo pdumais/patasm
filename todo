@@ -1,0 +1,13 @@
+- timer interupt
+    one reg to activate
+    one reg to set cycle in ms
+
+-------------
+    assembler should allow ascii data
+        $STRING "alllo"  (no null terminators)
+    signed arithmetic? introduce new conditions and modify cmp
+
+-----------------------------------------------------------------------------
+-- other
+    c++ emulator for more performances?
+

@@ -1,0 +1,478 @@
+<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+<meta content="utf-8" http-equiv="encoding">
+<html>
+<head>
+<link rel="stylesheet" type="text/css" href="style.css">
+<script src=vm.js></script>
+</head>
+<script>
+var timerPeriod=10;
+var vmIterations=10000;  
+var romCode = null;
+var highlightedLine = null;
+var vmstate=null;
+var lastException = -1;
+var system = null;
+var timer = null;
+var videoScreen = null;
+var runTimer = 0;
+var keyboard = new Keyboard();
+
+function initVM()
+{
+    system = new SoC();
+    system.setScreen(videoScreen);
+    system.setKeyboard(keyboard);
+    system.loadProgram(romCode);
+    updateMemorySize(system.getMemorySize());
+}
+
+function processVMException(ex)
+{
+    if (ex.Exception === undefined) throw ex;
+    var registers = new Uint32Array(ex.registers);
+    lastException = ex.Exception;
+    updateDebuggerLine(registers,ex.flags);
+    onRunningStateChanged("Exception");
+}
+
+function updateDebuggerLine(registers,flags)
+{
+    var line = registers[15];
+    var lineid = "dline"+line;
+    if (highlightedLine != null) highlightedLine.style.backgroundColor = "rgba(0,0,0,0)";
+    highlightedLine = document.getElementById(lineid); 
+    if (highlightedLine != null)
+    {
+        highlightedLine.style.backgroundColor = "rgba(253,221,221,1)";
+    }
+    updateRegisters(registers, flags);
+}
+
+function clearMemory()
+{
+    var memDiv = document.getElementById("memory");
+    var lines = memDiv.getElementsByTagName('pre');
+    for (var i=lines.length-1;i>=0;i--)
+    {
+        memDiv.removeChild(lines[i]);
+    }
+}
+
+function updateMemory()
+{
+    var index = Number(document.getElementById("memoryaddress").value);
+    if (isNaN(index)) index = 0;
+
+    clearMemory();
+    var memDiv = document.getElementById("memory");
+    for (var i=0;i<16;i++)
+    {
+        var label = index.toString(16);
+        var missing = 8-label.length; 
+        for (var p=0;p<missing;p++) label = "0"+label;
+        var pre = document.createElement("pre");
+        var st = label+":";
+        for (var n=0;n<16;n++)
+        {
+            var v;
+            try
+            {
+                v = system.memory.getByteAtByteIndex(index+n);
+            }
+            catch (e)
+            {
+                v = 0;
+            }
+            if (v === undefined) v = 0;
+            st+= " ";
+            if (v<16) st+="0";
+            st+=v.toString(16);
+        }
+        pre.innerHTML="0x"+st.toUpperCase();
+        memDiv.appendChild(pre);
+        index+=16;
+    }
+}
+
+function updateRegisters(registers, flags)
+{
+    var cells = document.getElementById('registers').getElementsByTagName('td');
+    for (var i = 0; i<16; i++)
+    {
+        var val = registers[i].toString(16);
+        var missing = 8-val.length;
+        for (var p=0;p<missing;p++) val="0"+val;
+        cells[i].innerHTML = "0x"+val;
+    } 
+
+    var cells = document.getElementById('flags').getElementsByTagName('td');
+    for (var i = 0; i<8; i++)
+    {
+        var val = ((flags>>i)&1);
+        cells[i].innerHTML = val;
+    }
+}
+
+function onFirmwareChanged()
+{
+    var a = document.getElementById("download");
+    if (romCode != null)
+    {
+        data = new Uint8Array(romCode);
+        var blob = new Blob([data], {type: "application/octet-stream"});
+        var url  = window.URL.createObjectURL(blob);
+        var d = new Date();
+        a.innerHTML = "Download firmware ("+d.toLocaleTimeString()+")";
+        a.href = url;
+        a.style.display = "inline";
+    
+        var d = new Disassembler();
+        var dcode = d.disassemble(romCode).split(/\n/);
+        var st = "";
+        for (var i = 0; i < dcode.length; i++)
+        {
+            st += "<pre id='dline"+(i*8)+"'>"+dcode[i]+"</pre>";
+        }
+        document.getElementById("disassembly").innerHTML = st;
+    }
+    else
+    {
+        a.style.display = "none";
+    }
+
+
+    onRunningStateChanged(vmstate);
+}
+
+function onRunningStateChanged(state)
+{
+    this.vmstate = state;
+    var st = "";
+    var step = document.getElementById("step");
+    var run = document.getElementById("run");
+    var stop = document.getElementById("stopexecute");
+    var pause = document.getElementById("pause");
+    if (state == "Stopped")
+    {
+        if (romCode != null)
+        {
+            step.disabled = false;
+            run.disabled = false;
+            stop.disabled = true;
+            pause.disabled = true;
+        }
+        else
+        {
+            step.disabled = true;
+            run.disabled = true;
+            stop.disabled = true;
+            pause.disabled = true;
+        }
+        if (highlightedLine != null) highlightedLine.style.backgroundColor = "rgba(0,0,0,0)";
+        updateRegisters([0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0],0);
+        st = "<font color=black>Stopped</font>";
+        runTimer = (new Date()).getTime()-runTimer;
+        st += "["+runTimer+"]";
+        document.getElementById("memoryaddress").value = "0x00000000";
+        updateMemory();
+    } 
+    else if (state == "Running")
+    {
+        step.disabled = true;
+        run.disabled = true;
+        stop.disabled = false;
+        pause.disabled = false;
+        st = "<font color=green>Running</font>";
+        runTimer = (new Date()).getTime();
+    }
+    else if (state == "Paused")
+    {
+        step.disabled = false;
+        run.disabled = false;
+        stop.disabled = false;
+        pause.disabled = true;
+        st = "<font color=red>Paused</font>";
+        runTimer = (new Date()).getTime()-runTimer;
+        st += "["+runTimer+"]";
+        document.getElementById("memoryaddress").value = "0x00000000";
+        updateMemory();
+    }
+    else if (state == "Exception")
+    {
+        step.disabled = false;
+        run.disabled = false;
+        stop.disabled = false;
+        pause.disabled = true;
+        st = "<font color=red>Exception";
+        st += " ("+lastException+" - ";
+        switch (lastException)
+        {
+            case -1: st+="Double fault exception - VM will reset"; break;
+            case 0: st+="Breakpoint"; break;
+            case 1: st+="Undefined Instruction"; break;
+            case 2: st+="Invalid operand"; break;
+            case 3: st+="Division by zero"; break;
+            case 4: st+="Illegal memory access"; break;
+        };
+        st+=")</font>";
+        runTimer = (new Date()).getTime()-runTimer;
+        st += "["+runTimer+"]";
+        document.getElementById("memoryaddress").value = "0x00000000";
+        updateMemory();
+    }
+    
+    document.getElementById("systemstate").innerHTML = st;
+}
+
+function assemble()
+{
+    var output = document.getElementById("output");
+    var source = document.getElementById("sourcecode").value;
+    var a = new Assembler();
+    var result = a.assemble(source);
+    
+    if (result.result == "error")
+    {
+        output.innerHTML += "<font color=red>Error at: "+result.description+"\r\n Reason: "+result.reason+"</font><br/>";
+    }
+    else
+    {
+        output.innerHTML += "Assembler success<br/>";
+    }
+
+    romCode = result.binary;
+    stopProgram(); // will reload code
+    onFirmwareChanged();
+}
+
+function stepProgram()
+{
+    onRunningStateChanged("Running");
+    try
+    {
+        system.stepByStep(); 
+    }
+    catch(ex)
+    {
+        processVMException(ex);
+    }
+}
+
+function runContinuous()
+{
+    try
+    {
+        system.runContinuous(vmIterations);
+    }
+    catch(ex)
+    {
+        clearInterval(timer);
+        processVMException(ex);
+    }
+}
+
+
+function startProgram()
+{
+    onRunningStateChanged("Running");
+    timer = setInterval(runContinuous,timerPeriod);
+}
+
+function stopProgram()
+{
+    clearInterval(timer);
+    initVM();
+    onRunningStateChanged("Stopped");
+}
+
+function pauseProgram()
+{
+    clearInterval(timer);
+    onRunningStateChanged("Paused");
+    updateDebuggerLine(system.registers,system.flags);
+}
+
+function updateMemorySize(size)
+{
+    document.getElementById("memorysize").innerHTML = size;
+}
+
+function openROM(ev)
+{
+    var reader = new FileReader();
+    reader.onload = function(e){
+        var a = new Uint8Array(e.target.result);
+        romCode = [];
+        for (var i=0;i<a.length;i++) romCode.push(a[i]);
+        document.getElementById("sourcecode").innerHTML = "";
+        var output = document.getElementById("output");
+        output.innerHTML += "ROM code loaded<br/>";
+        stopProgram(); // will reload code
+        onFirmwareChanged();
+    };
+    var filename = ev.target.files[0];
+    reader.readAsArrayBuffer(filename);
+}
+
+function processKeyPress(ev)
+{
+    if (this.vmstate != "Running") return;
+    var char = ev.which || ev.keyCode;
+    if (keyboard!=null) keyboard.onkeypress(char);
+}
+
+</script>
+
+
+
+<body>
+<div class=header>
+    <a style="margin:auto" href="documentation.html" target="_blank">View documentation</a>
+    <a style="margin:auto" href="samples.txt" target="_blank">View samples</a>
+</div>
+<div class=codediv>
+    <div>
+        <b>Load ROM:</b> <input type="file" accept="*" onchange="openROM(event)"><br/>
+    </div>
+    <div class=output id=output></div>
+    <div class=codewindow>
+        <p><b>Source Code Editor:</b></p>
+        <textarea class="sourcecode" id="sourcecode">
+    cli
+    mov r1,0xFF000000
+    mov r2,0xF0000000
+    mov r3,64000
+l:  st32 r2,r1
+    sub r3,1
+    add  r2,4
+    cmp r3,0
+    jmp.nz l
+
+    mov r14,0x8000
+    mov r1,3
+    reg r1,exhandler
+    div r1,0
+    push 0x1234
+    pop r1
+    mov r3,0x1
+    shl r3,4
+ll: sub r3, 1
+    call inc
+    cmp r3,0
+    jmp.nz  ll
+    break
+data: $WORD32 0xDEADBEEF    
+dt: $BYTE 242
+    $BYTE 1
+    $BYTE 2
+    $BYTE 3
+inc: add r4,2
+    ret
+exhandler: pop r13
+    add r13,8
+    push r13
+    eret
+
+        </textarea>
+    </div>
+    <div class=codewindow>
+        <p><b>Disassembly:</b></p>
+        <div class=disassembly id=disassembly></div>
+    </div>
+    <div style='clear:both;'></div>
+    <div>
+        <button onclick=javascript:assemble()>Assemble</button>
+        <a id=download download="rom.bin"></a>
+    </div>
+</div>
+
+<div class=system>
+    <button id=step onclick=javascript:stepProgram()>Step</button>
+    <button id=run onclick=javascript:startProgram()>Run</button>
+    <button id=stopexecute onclick=javascript:stopProgram()>Abort</button>
+    <button id=pause onclick=javascript:pauseProgram()>Pause</button>
+    <br/>
+    <table><tr>
+    <td>
+    <table>
+    <tr><td><b>Memory: </b></td><td id=memorysize></td></tr>
+    <tr><td><b>State: </b></td><td id=systemstate></td></tr>
+    </table>
+    <table class=registers id=registers>
+    <tr>
+        <th>r0</th><th>r1</th><th>r2</th><th>r3</th>
+    </tr>
+    <tr>
+        <td>00</td><td>00</td><td>00</td><td>00</td>
+    </tr>
+    <tr>
+        <th>r4</th><th>r5</th><th>r6</th><th>r7</th>
+    </tr>
+    <tr>
+        <td>00</td><td>00</td><td>00</td><td>00</td>
+    </tr>
+    <tr>
+        <th>r8</th><th>r9</th><th>r10</th><th>r11</th>
+    </tr>
+    <tr>
+        <td>00</td><td>00</td><td>00</td><td>00</td>
+    </tr>
+    <tr>
+        <th>r12</th><th>r13</th><th>r14(SP)</th><th>r15(IP)</th>
+    </tr>
+    <tr>
+        <td>00</td><td>00</td><td>00</td><td>00</td>
+    </tr>
+    </table>
+    <table class=registers id=flags>
+    <tr>
+        <th>Z</th><th>c</th><th>i</th><th>e</th><th></th><th></th><th></th><th></th>
+    </tr>
+    <tr>
+        <td>00</td><td>00</td><td>00</td><td>00</td><td>00</td><td>00</td><td>00</td><td>00</td>
+    </tr>
+    </table>
+    </td>
+    <td>
+    <div class=screen id=screen onkeypress="processKeyPress(event)" tabindex="1"></div>
+    </td>
+    <tr>
+    <td colspan=2>
+    Memory view:
+    <table class=memory>
+    <tr><td><input type=text id=memoryaddress onchange="updateMemory();"/></td></tr>
+    <tr><td><div id=memory class=memory></div></td></tr>
+    </td>
+    </tr>
+    </tr></table>
+</div>
+</body>
+
+<script>
+videoScreen = new Video(document.getElementById("screen"));
+onFirmwareChanged();
+onRunningStateChanged("Stopped");
+
+/*setInterval(function(){
+    for (var i=0;i<64000;i++)
+    {   
+        var a = screenBuffer.data[(i*4)];
+        var b = screenBuffer.data[(i*4)+1];
+        var c = screenBuffer.data[(i*4)+2];
+        var d = 0;
+        d = a;
+        a = b; 
+        b = c;
+        c = d;
+        if (a==0 && b==0 && c==0) a=0xFF;
+        screenBuffer.data[(i*4)]=a;
+        screenBuffer.data[(i*4)+1]=b;
+        screenBuffer.data[(i*4)+2]=c;
+        screenBuffer.data[(i*4)+3]=0xFF;
+    }
+    updateScreen();
+},10);*/
+
+</script>
+</html>

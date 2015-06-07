@@ -1,0 +1,116 @@
+<html>
+<style>
+table
+{
+border-collapse:collapse;
+border:1px solid black;
+}
+td, th
+{
+border:1px solid black;
+padding:3px;
+min-width:10px;
+}
+
+</style>
+<script src=vm.js></script>
+<body>
+<h1>Documentation</h1>
+<h2>Memory</h2>
+<p>When the vm starts, it starts executing code at 0x00000000
+<table>
+<tr><th>Address</th><th>Size</th><th>Description</th></tr>
+<tr><td>0x00000000</td><td>0x00100000</td><td>RAM</td></tr>
+<tr><td>0xF0000000</td><td>0x0003E800</td><td>VGA buffer</td></tr>
+<tr><td>0xF1000000</td><td>0x000007D0</td><td>Text video buffer</td></tr>
+<tr><td>0xF2000000</td><td>0x00000010</td><td>video card control registers</td></tr>
+<tr><td>0xF3000000</td><td>0x00000002</td><td>keyboard control registers</td></tr>
+</table>
+</p>
+<h2>Registers</h2>
+<p>
+A total of 16 32bit registers including 14 general purpose registers (r0-r13), a stack pointer (r14) and
+an instruction pointer (r15). There is also a Flags register that is not directly accessible. The format
+of the Flags register is:
+<table><tr><th>Z (zero)</th><th>c (carry)</th><th>i (ints enabled)</th><th>e (exception)</th><th></th><th></th><th></th><th></th></tr></table>
+</p>
+<p>
+No floating points nor signed integers. Only the "CMP" instruction modifies Z and C flags
+The assembler recognizes the format: {label:} mnemonic{.condition} {operand1}{,operand2}.
+Each instruction is (very inneficiently) encoded on 64bit:
+<p>
+<table>
+<tr><th>Bits</th><th>Description</th></tr>
+<tr><td>0-7</td><td>instruction</td></tr>
+<tr><td>8-12</td><td>operand1 register if applicable</td></tr>
+<tr><td>13-17</td><td>operand2 register if applicable</td></tr>
+<tr><td>18-21</td><td>condition</td></tr>
+<tr><td>22-31</td><td>reserved</td></tr>
+<tr><td>32-64</td><td>32bit int for op1 or op2 if applicable</td></tr>
+</table>
+<h3>Conditional execution</h3>
+<p>
+Every instruction have the ability to be conditionally executed with the following suffixes
+</p>
+<table><tr><th>Opcode</th><th>Mnemonic</th><th>Description</th></tr>
+<script>
+    var set = new InstructionSet();
+    for (var i=0;i<set.instructions.length;i++)
+    {
+        var ins = set.conditions[i];
+        if (ins === undefined) continue;
+        document.write("<tr><td>0x"+ins.code.toString(16)+"</td><td>"+ins.condition+"</td><td>"+ins.doc+"</td></tr>");
+    }
+</script>
+</table>
+<h3>Instructions set</h3>
+<table><tr><th>Opcode</th><th>Mnemonic</th><th>Description</th></tr>
+<script>
+    for (var i=0;i<set.instructions.length;i++)
+    {
+        var ins = set.instructions[i];
+        if (ins === undefined) continue;
+        document.write("<tr><td>0x"+ins.opcode.toString(16)+"</td><td>"+ins.mnemonic+"</td><td>"+ins.doc+"</td></tr>");
+    }
+</script>
+</table>
+<h2>Exceptions</h2>
+<table>
+<tr><th>Number</th><th>Description</th></tr>
+<tr><td>0</td><td>Breakpoint</td></tr>
+<tr><td>1</td><td>Undefined instruction</td></tr>
+<tr><td>2</td><td>Invalid operands</td></tr>
+<tr><td>3</td><td>Divide by zero</td></tr>
+<tr><td>4</td><td>Illegal memory access</td></tr>
+</table>
+<h2>Interupts</h2>
+<p>
+At the end of an instruction, and after r15 has been updated, the CPU checks if a device has any pending IRQ if and only if the "i" 
+flag is set. if an IRQ is pending, the CPU will check if a handler was registered for that IRQ with the "ireg" instruction.
+If a handler is found, the following occurs:
+<ul>
+<li>Flags are pushed on the stack;
+<li>Register bank is switched for the interupt bank;
+<li>The "i" flag is cleared;
+<li>r15 is set to the address of the handler
+</ul>
+<p>
+A handler should return using the "iret" instruction. The iret instruction restore the general
+register bank and pop the flags out of the stack
+</p>
+<h2>Video</h2>
+<p>
+to switch video mode, write a 8bit value to 0xF2000000. A value of 0
+will switch to vga mode 320x200 (the default) and a value of 1 will
+switch to 80x25 text mode.
+</p>
+<h2>keyboard</h2>
+<p>
+The keyboard will trigger an IRQ #1 when a key is pressed. So a consumer must register a handler with the "ireg" instruction
+to receive those interrupts and the "i" flag must be set using the "sti" instruction.
+Once the consumer is ready to process the event, the key can be read from address 1 of the keyboard control memory.
+After a key is read from the buffer, the buffer will be updated with the new key if any.
+Failure to at address 1 will make the keyboard driver continue to raise IRQ 1 continuously.
+</p>
+</body>
+</html>
